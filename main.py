@@ -1,5 +1,5 @@
 from tkinter import Tk, BOTH, Canvas
-import time
+import time, random
 
 # --- Main window class
 
@@ -29,7 +29,7 @@ class Window:
     def draw_line(self, line, fill_color):
         line.draw(self.canvas, fill_color)
 
-    def draw_cell(self, cell, fill_color):
+    def draw_cell(self, cell, fill_color="black"):
         cell.draw(self.canvas, fill_color)
     
     def draw_move(self, cell1, cell2, undo=False):
@@ -56,25 +56,27 @@ class Cell:
         self.y1, self.y2 = min(y1, y2), max(y1, y2)
         self.has_left_wall = self.has_right_wall = True
         self.has_top_wall = self.has_bottom_wall = True
+
+        self.visited = False
     
-    def draw(self, canvas, fill_color):
+    def draw(self, canvas, fill_color="black"):
         top_left = Point(self.x1, self.y1)
         top_right = Point(self.x2, self.y1)
         bottom_left = Point(self.x1, self.y2)
         bottom_right = Point(self.x2, self.y2)
 
         lines = []
-        if self.has_left_wall:
-            lines.append(Line(top_left, bottom_left))
-        if self.has_right_wall:
-            lines.append(Line(top_right, bottom_right))
-        if self.has_top_wall:
-            lines.append(Line(top_left, top_right))
-        if self.has_bottom_wall:
-            lines.append(Line(bottom_left, bottom_right))
+        left_color = fill_color if self.has_left_wall else "white"
+        right_color = fill_color if self.has_right_wall else "white"
+        top_color = fill_color if self.has_top_wall else "white"
+        bottom_color = fill_color if self.has_bottom_wall else "white"
+        lines.append((Line(top_left, bottom_left), left_color))
+        lines.append((Line(top_right, bottom_right), right_color))
+        lines.append((Line(top_left, top_right), top_color))
+        lines.append((Line(bottom_left, bottom_right), bottom_color))
         
-        for L in lines:
-            L.draw(canvas, fill_color)
+        for (L, color) in lines:
+            L.draw(canvas, color)
 
     def center(self):
         return Point((self.x1 + self.x2) // 2, (self.y1 + self.y2) // 2)
@@ -91,7 +93,7 @@ class Maze:
         x1, y1,
         num_cols, num_rows,
         cell_size_x, cell_size_y,
-        win
+        win=None
     ):
         self.x1, self.y1 = x1, y1
         self.num_rows, self.num_cols = num_rows, num_cols
@@ -99,6 +101,9 @@ class Maze:
         self.win = win
 
         self._create_cells()
+        self._break_entrance_and_exit()
+        self.break_walls()
+        self._reset_visited()
     
     def _create_cells(self):
         self.cells = []
@@ -109,7 +114,8 @@ class Maze:
             for y in range(self.num_rows):
                 self.cells[x].append(Cell(x_pos[x], x_pos[x+1], y_pos[y], y_pos[y+1]))
         
-        self._draw_cells()
+        if self.win is not None:
+            self._draw_cells()
 
     def _draw_cells(self):
         for col in self.cells:
@@ -120,6 +126,52 @@ class Maze:
     def _animate(self):
         self.win.redraw()
         time.sleep(0.02)
+    
+    def _break_entrance_and_exit(self):
+        self.cells[0][0].has_left_wall = False
+        self.win.draw_cell(self.cells[0][0])
+        self.cells[self.num_cols - 1][self.num_rows - 1].has_right_wall = False
+        self.win.draw_cell(self.cells[self.num_cols - 1][self.num_rows - 1])
+    
+    def break_walls(self):
+        self._break_walls_r(0, 0)
+
+    def _break_walls_r(self, i, j):
+        self.cells[i][j].visited = True
+        while True:
+            neighbors = [(i+1, j), (i-1, j), (i, j+1), (i, j-1)]
+            # filter first for bounds, second for visited
+            neighbors = list(filter(lambda pos: 0 <= pos[0] < self.num_cols and 0 <= pos[1] < self.num_rows, neighbors))
+            neighbors = list(filter(lambda pos: not self.cells[pos[0]][pos[1]].visited, neighbors))
+
+            if len(neighbors) == 0:
+                self.win.draw_cell(self.cells[i][j])
+                self._animate()
+                return
+            
+            dir = random.choice(neighbors)
+            dx, dy = dir[0] - i, dir[1] - j
+            match (dx, dy):
+                case (1, 0):
+                    self.cells[i][j].has_right_wall = False
+                    self.cells[i+1][j].has_left_wall = False
+                case (-1, 0):
+                    self.cells[i][j].has_left_wall = False
+                    self.cells[i-1][j].has_right_wall = False
+                case (0, 1):
+                    self.cells[i][j].has_bottom_wall = False
+                    self.cells[i][j+1].has_top_wall = False
+                case (0, -1):
+                    self.cells[i][j].has_top_wall = False
+                    self.cells[i][j-1].has_bottom_wall = False
+            self.win.draw_cell(self.cells[i][j])
+            self._animate()
+            self._break_walls_r(dir[0], dir[1])
+
+    def _reset_visited(self):
+        for col in self.cells:
+            for cell in col:
+                cell.visited = False
 
 # --- Main function
 
