@@ -104,6 +104,7 @@ class Maze:
         self._break_entrance_and_exit()
         self.break_walls()
         self._reset_visited()
+        self.solve()
     
     def _create_cells(self):
         self.cells = []
@@ -172,6 +173,43 @@ class Maze:
         for col in self.cells:
             for cell in col:
                 cell.visited = False
+    
+    def solve(self):
+        return self._solve_r (0, 0)
+
+    def _solve_r(self, i, j):
+        self.cells[i][j].visited = True
+
+        if (i, j) == (self.num_cols - 1, self.num_rows - 1):
+            return True
+        
+        neighbors = [(i+1, j), (i, j+1), (i-1, j), (i, j-1)]
+        neighbors = list(filter(lambda pos: 0 <= pos[0] < self.num_cols and 0 <= pos[1] < self.num_rows, neighbors))
+        neighbors = list(filter(lambda pos: not self.cells[pos[0]][pos[1]].visited, neighbors))
+
+        if len(neighbors) == 0:
+            return False
+        
+        for n in neighbors:
+            dx, dy = n[0] - i, n[1] - j
+            match (dx, dy):
+                case (1, 0):
+                    visitable = not self.cells[i][j].has_right_wall
+                case (-1, 0):
+                    visitable = not self.cells[i][j].has_left_wall
+                case (0, 1):
+                    visitable = not self.cells[i][j].has_bottom_wall
+                case (0, -1):
+                    visitable = not self.cells[i][j].has_top_wall
+            print (f"Attempting to move to ({n[0]}, {n[1]}). Visitable: {visitable}")
+            if visitable:
+                self.win.draw_move (self.cells[i][j], self.cells[n[0]][n[1]])
+                self._animate()
+                if self._solve_r(n[0], n[1]):
+                    return True
+                self.win.draw_move (self.cells[n[0]][n[1]], self.cells[i][j], undo=True)
+                self._animate()
+        return False
 
 # --- Main function
 
